@@ -1,0 +1,4 @@
+# Optional: enables the PyTorch classifier integration point (app/core/ml.py).
+# No weights are shipped; set STEGO_MODEL_PATH to a trained checkpoint.
+-r requirements.txt
+torch>=2.2
