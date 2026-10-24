@@ -1,12 +1,14 @@
 """FastAPI application factory. Run with:  uvicorn app.main:app --reload"""
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__, service
@@ -71,6 +73,48 @@ def create_app() -> FastAPI:
         return _err(500, "internal_error", "An unexpected server error occurred.")
 
     app.include_router(router)
+
+    # Serve frontend single-page application if static assets exist
+    here = os.path.dirname(__file__)
+    static_dir = os.path.abspath(os.path.join(here, "..", "static"))
+    if not (os.path.isdir(static_dir) and os.path.isfile(os.path.join(static_dir, "index.html"))):
+        static_dir = os.path.abspath(os.path.join(here, "..", "..", "frontend", "dist"))
+
+    if os.path.isdir(static_dir) and os.path.isfile(os.path.join(static_dir, "index.html")):
+        assets_dir = os.path.join(static_dir, "assets")
+        if os.path.isdir(assets_dir):
+            app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+        @app.get("/favicon.ico", include_in_schema=False)
+        def favicon():
+            fav = os.path.join(static_dir, "favicon.ico")
+            if os.path.isfile(fav):
+                return FileResponse(fav)
+            return Response(status_code=204)
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def serve_spa(full_path: str):
+            if full_path.startswith("api/") or full_path in ("docs", "redoc", "openapi.json"):
+                raise StarletteHTTPException(status_code=404)
+            target = os.path.join(static_dir, full_path)
+            if full_path and os.path.isfile(target):
+                return FileResponse(target)
+            return FileResponse(os.path.join(static_dir, "index.html"))
+    else:
+        @app.get("/")
+        def root():
+            return {
+                "name": "StegoVision AI Backend API",
+                "version": __version__,
+                "status": "online",
+                "documentation": "/docs",
+                "health_check": "/api/health",
+            }
+
+        @app.get("/favicon.ico", include_in_schema=False)
+        def favicon():
+            return Response(status_code=204)
+
     return app
 
 

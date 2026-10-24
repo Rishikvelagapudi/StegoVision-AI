@@ -24,6 +24,14 @@ def test_health():
     assert r.status_code == 200 and r.json()["status"] == "ok" and r.json()["ai_model_available"] is False
 
 
+def test_root_and_favicon():
+    c = client()
+    r = c.get("/")
+    assert r.status_code == 200
+    fav = c.get("/favicon.ico")
+    assert fav.status_code in (200, 204)
+
+
 def test_full_http_flow_with_byte_equal_recovery():
     c = client()
     secret = secret_png()
